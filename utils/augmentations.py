@@ -29,7 +29,6 @@ class Albumentations:
                 A.RandomBrightnessContrast(p=0.0),
                 A.RandomGamma(p=0.0),
                 A.ImageCompression(quality_lower=75, p=0.0)]  # transforms
-            print('custom_args: ',custom_args)
             self.transform = A.Compose(T, bbox_params=A.BboxParams(format='yolo', label_fields=['class_labels'], **custom_args))
 
             LOGGER.info(colorstr('albumentations: ') + ', '.join(f'{x}' for x in self.transform.transforms if x.p))

@@ -380,6 +380,9 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
 
                 # Save last, best and delete
                 torch.save(ckpt, last)
+                ckp_path = Path('/opt/ml/checkpoints/') #Path('../data/tmp/checkpoints/') #
+                ckp_path.mkdir(parents=True, exist_ok=True)
+                torch.save(ckpt, str(ckp_path/'last.pt'))
                 if best_fitness == fi:
                     torch.save(ckpt, best)
                 if opt.save_period > 0 and epoch % opt.save_period == 0:
@@ -470,9 +473,6 @@ def parse_opt(known=False):
     parser.add_argument('--upload_dataset', nargs='?', const=True, default=False, help='Upload data, "val" option')
     parser.add_argument('--bbox_interval', type=int, default=-1, help='Set bounding-box image logging interval')
     parser.add_argument('--artifact_alias', type=str, default='latest', help='Version of dataset artifact to use')
-
-    # Custom arguments
-    parser.add_argument('--output_path', type=str, default='s3://sagemaker-us-east-1-107705121493/results/train', help='s3 output path')
     return parser.parse_known_args()[0] if known else parser.parse_args()
 
 
@@ -618,12 +618,6 @@ def main(opt, callbacks=Callbacks()):
                     f"Results saved to {colorstr('bold', save_dir)}\n"
                     f'Usage example: $ python train.py --hyp {evolve_yaml}')
 
-
-    import s3fs
-    s3_file = s3fs.S3FileSystem()
-    source_path = str(opt.save_dir)
-    target_path = f"{opt.output_path}/{Path(source_path).name}"
-    s3_file.put(source_path, target_path, recursive=True)
 
 def run(**kwargs):
     # Usage: import train; train.run(data='coco128.yaml', imgsz=320, weights='yolov5m.pt')

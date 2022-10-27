@@ -380,9 +380,6 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
 
                 # Save last, best and delete
                 torch.save(ckpt, last)
-                ckp_path = Path('/opt/ml/checkpoints/') #Path('../data/tmp/checkpoints/') #
-                ckp_path.mkdir(parents=True, exist_ok=True)
-                torch.save(ckpt, str(ckp_path/'last.pt'))
                 if best_fitness == fi:
                     torch.save(ckpt, best)
                 if opt.save_period > 0 and epoch % opt.save_period == 0:

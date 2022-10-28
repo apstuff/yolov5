@@ -50,3 +50,5 @@ thop>=0.1.1  # FLOPs computation
 cloudpathlib
 boto3
 s3fs
+sagemaker-ssh-helper==1.7.8
+environs==9.5.0

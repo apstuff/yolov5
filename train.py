@@ -380,10 +380,10 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
 
                 # Save last, best and delete
                 torch.save(ckpt, last)
-                if os.path.exists('/opt/ml/'): #sagemaker estimator needs checkpoint in separate folder than model
-                    ckp_path = Path('/opt/ml/checkpoints/') #Path('../data/tmp/checkpoints/') #
-                    ckp_path.mkdir(parents=True, exist_ok=True)
-                    torch.save(ckpt, str(ckp_path/'last.pt'))
+                #if os.path.exists('/opt/ml/'): #sagemaker estimator needs checkpoint in separate folder than model
+                #    ckp_path = Path('/opt/ml/checkpoints/') #Path('../data/tmp/checkpoints/') #
+                #    ckp_path.mkdir(parents=True, exist_ok=True)
+                #    torch.save(ckpt, str(ckp_path/'last.pt'))
                 if best_fitness == fi:
                     torch.save(ckpt, best)
                 if opt.save_period > 0 and epoch % opt.save_period == 0:
@@ -619,6 +619,12 @@ def main(opt, callbacks=Callbacks()):
                     f"Results saved to {colorstr('bold', save_dir)}\n"
                     f'Usage example: $ python train.py --hyp {evolve_yaml}')
 
+    import shutil
+    if 'opt/ml/checkpoints/' in str(opt.save_dir):
+        print('copy checkpoint to model dir')
+        shutil.copytree(str(opt.save_dir), f'/opt/ml/model/runs/{opt.name}')
+    else:
+        print(str(opt.save_dir))
 
 def run(**kwargs):
     # Usage: import train; train.run(data='coco128.yaml', imgsz=320, weights='yolov5m.pt')

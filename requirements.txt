@@ -47,8 +47,8 @@ thop>=0.1.1  # FLOPs computation
 # roboflow
 
 # Custom -------------
-cloudpathlib
-boto3
-s3fs
-sagemaker-ssh-helper==1.7.8
+cloudpathlib==0.10.0
+boto3==1.24.78
+s3fs==0.4.2
 environs==9.5.0
+sagemaker-ssh-helper==1.7.8

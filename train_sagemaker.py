@@ -47,7 +47,7 @@ if __name__ == "__main__":
     train.main(opt)
 
     if (env_args['data'].parent/'images/test/').exists():
-        import val as yoloval
+        import val as validate
         val_env_args = {}
         val_env_args['data'] = env_args['data']
         val_env_args['project'] = env_args['project']
@@ -55,10 +55,10 @@ if __name__ == "__main__":
         val_env_args['task'] = 'test'
         val_env_args['weights'] = str(resume_path.parent / 'best.pt')
         val_env_args['name'] = f"{env_args['name']}/test"
-        opt = yoloval.parse_opt(True)
+        opt = validate.parse_opt(True)
         for key, val in val_env_args.items():
             setattr(opt, key, val)
-        yoloval.main(opt)
+        validate.main(opt)
 
     src = resume_path.parent / 'best.pt'
     dst = model_dir

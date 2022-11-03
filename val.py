@@ -280,6 +280,18 @@ def run(
     # Print results
     pf = '%22s' + '%11i' * 2 + '%11.3g' * 4  # print format
     LOGGER.info(pf % ('all', seen, nt.sum(), mp, mr, map50, map))
+
+    # Custom result saving to csv
+    import pandas as pd
+    if len(stats) and stats[0].any():
+        csv_path = save_dir / f'results_{task}.csv'
+        result_data = [('all', seen, nt.sum(), tp.sum(), fp.sum(), f1.mean(), mp, mr, map50, map)]
+        for i, c in enumerate(ap_class):
+            result_data.append((names[c], seen, nt[c], tp[i], fp[i], f1[i], p[i], r[i], ap50[i], ap[i]))
+        df_result = pd.DataFrame(columns=['Class', 'Images', 'Instances', 'TP', 'FP', 'F1', 'P', 'R', 'mAP50', 'mAP50-95'],
+                                 data=result_data)
+        df_result.to_csv(csv_path)
+
     if nt.sum() == 0:
         LOGGER.warning(f'WARNING ⚠️ no labels found in {task} set, can not compute metrics without labels')
 

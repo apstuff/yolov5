@@ -284,7 +284,7 @@ def run(
     # Custom result saving to csv
     import pandas as pd
     if len(stats) and stats[0].any():
-        csv_path = save_dir / f'results_{task}.csv'
+        csv_path = save_dir / f'{task}_results.csv'
         result_data = [('all', seen, nt.sum(), tp.sum(), fp.sum(), f1.mean(), mp, mr, map50, map)]
         for i, c in enumerate(ap_class):
             result_data.append((names[c], seen, nt[c], tp[i], fp[i], f1[i], p[i], r[i], ap50[i], ap[i]))

@@ -40,6 +40,10 @@ if __name__ == "__main__":
         if resume_path.exists():
             env_args['resume'] = str(resume_path)
 
+        weights_path = dataset_path / env.path("WEIGHTS")
+        if weights_path.exists():
+            env_args['weights'] = str(weights_path)
+
     opt = train.parse_opt(True)
     for key, val in env_args.items():
         setattr(opt, key, val)

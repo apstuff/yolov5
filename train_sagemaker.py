@@ -1,3 +1,4 @@
+import typing
 from pathlib import Path
 import shutil
 
@@ -14,12 +15,13 @@ if __name__ == "__main__":
     # Env
     ############################################
 
-    env_args: dict = {}
+    env_args: typing.Dict[str, typing.Union[str, int, Path]] = {}
     env = environs.Env()
     # env.read_env() # read .env file, not needed in sagemaker env
 
     # Sagemaker env variables
     with env.prefixed("SM_"):
+        # Directory where the dataset lives
         dataset_path = env.path("CHANNEL_YOLO_DATASET")
         model_dir = env.path("MODEL_DIR")
         output_data_dir = env.path("OUTPUT_DATA_DIR")
@@ -40,10 +42,6 @@ if __name__ == "__main__":
         if resume_path.exists():
             env_args['resume'] = str(resume_path)
 
-        weights_path = dataset_path / env.path("WEIGHTS")
-        if weights_path.exists():
-            env_args['weights'] = str(weights_path)
-
     opt = train.parse_opt(True)
     for key, val in env_args.items():
         setattr(opt, key, val)
@@ -52,7 +50,7 @@ if __name__ == "__main__":
 
     if (env_args['data'].parent/'images/test/').exists():
         import val as validate
-        val_env_args = {}
+        val_env_args : typing.Dict[str, typing.Union[str, int, Path]] = {}
         val_env_args['data'] = env_args['data']
         val_env_args['project'] = env_args['project']
         val_env_args['imgsz'] = opt.imgsz

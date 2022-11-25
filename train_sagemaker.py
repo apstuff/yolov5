@@ -25,6 +25,7 @@ if __name__ == "__main__":
         dataset_path = env.path("CHANNEL_YOLO_DATASET")
         model_dir = env.path("MODEL_DIR")
         output_data_dir = env.path("OUTPUT_DATA_DIR")
+        weights_dir = env.path("CHANNEL_WEIGHTS")
 
     # Yolov5 arguments
     with env.prefixed("YOLO_"):
@@ -41,6 +42,11 @@ if __name__ == "__main__":
         resume_path = env.path("RESUME_PATH")
         if resume_path.exists():
             env_args['resume'] = str(resume_path)
+
+        # the weights path is changed to point to the locally pretrained weights if they exist
+        weights_path = weights_dir / env.path("WEIGHTS")
+        if weights_path.exists():
+            env_args['weights'] = str(weights_path)
 
     opt = train.parse_opt(True)
     for key, val in env_args.items():

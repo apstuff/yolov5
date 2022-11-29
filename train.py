@@ -619,13 +619,6 @@ def main(opt, callbacks=Callbacks()):
                     f"Results saved to {colorstr('bold', save_dir)}\n"
                     f'Usage example: $ python train.py --hyp {evolve_yaml}')
 
-    import shutil
-    if 'opt/ml/checkpoints/' in str(opt.save_dir):
-        print('copy checkpoint to model dir')
-        shutil.copytree(str(opt.save_dir), f'/opt/ml/model/runs/{opt.name}')
-    else:
-        print(str(opt.save_dir))
-
 def run(**kwargs):
     # Usage: import train; train.run(data='coco128.yaml', imgsz=320, weights='yolov5m.pt')
     opt = parse_opt(True)

@@ -8,33 +8,39 @@ import sagemaker_ssh_helper
 
 import train
 import val as validate
+import export
+
 
 def main():
     """
     Wraps yolo's train.py to be called from sagemaker.Estimator
 
     Assumes the following directory structure, which maps to paths in S3
+
+    /yolov5                      - s3://{bucket}/model/{base_job_name}/checkpoints/{uuid}
+    ├── train
+    └── test
     /opt/ml
     ├── code                     - s3://{bucket}/model/{base_job_name}/code/{job_name}/source.tar.gz
     ├── input
-        ├── config
         └── data
+            ├── weights
             └── yolo_dataset     - s3://{bucket}/datasets/{dataset_name}
-    ├── checkpoints              - s3://{bucket}/model/{base_job_name}/checkpoints/{uuid}
-        ├── train
-        └── test
     ├── model                    - s3://{bucket}/model/{base_job_name}/output/{job_name}/output/model.tar.gz
     └── output
         └── data                 - s3://{bucket}/model/{base_job_name}/output/{job_name}/output/output.tar.gz
             ├── train
             └── test
 
+    /yolov5/train: yolo save_dir for train.py (ie {project}/{name}). Will be continously synced to S3.
+    /yolov5/test: yolo save_dir for val.py.
     /opt/ml/code: This is the working directory for the sagemaker container.
     /opt/ml/input/data/yolo_dataset: This is where Sagemaker puts data from S3.
-    /opt/ml/checkpoints/train: yolo save_dir for train.py (ie {project}/{name}). Will be continously synced to S3.
-    /opt/ml/checkpoints/test: yolo save_dir for val.py.
+    /opt/ml/input/data/weights: If pretrained weights are provided from S3 they will be mounted here.
     /opt/ml/model: At the end of training, best.pt is copied here so that Sagemaker can export it.
     /opt/ml/output/data: At the end of training and testing the respective save_dir contents are copied here for Sagemaker to export.
+
+    Also see: https://docs.aws.amazon.com/sagemaker/latest/dg/model-train-storage.html
 
     There are two kinds of arguments passed to this script by Estimator, args and env variables (prefixed with YOLO_).
     Args are meant to be changing often, such as number of epochs or batch size.
@@ -52,11 +58,10 @@ def main():
     # Runs ssh helper (configured by estimator launch code)
     sagemaker_ssh_helper.setup_and_start_ssh()
 
-    ############################################
-    # Env
-    ############################################
+    """
+    Env
+    """
 
-    train_env_args: typing.Dict[str, typing.Union[str, int, Path]] = {}
     env = environs.Env()
     # env.read_env() # read .env file, not needed in sagemaker env
 
@@ -71,32 +76,36 @@ def main():
 
     # Yolov5 arguments
     with env.prefixed("YOLO_"):
-        train_env_args["data"] = dataset_path / env.path("DATASET_FILE")
-        train_env_args["hyp"] = dataset_path / env.path("HYP_FILE")
+        dataset_file = dataset_path / env.path("DATASET_FILE")
+        hyp_file = dataset_path / env.path("HYP_FILE")
         # overwrite any existing output
-        train_env_args["save_period"] = env.int("SAVE_PERIOD", -1)
+        save_period = env.int("SAVE_PERIOD", -1)
 
-        checkpoint_path: Path = env.path("CHECKPOINT_PATH")
-        if not checkpoint_path.exists():
-            checkpoint_path.mkdir(parents=True)
-        else:
-            assert checkpoint_path.is_dir()
+        save_dir: Path = env.path("SAVE_DIR")
+        if not save_dir.exists():
+            save_dir.mkdir(parents=True)
+        assert save_dir.is_dir()
 
-        train_env_args["project"] = str(checkpoint_path)
-        train_env_args["name"] = "train"
-        train_env_args["exist_ok"] = True
-        # only resume if the file exists
-        resume_path: Path = (
-            Path(train_env_args["project"])
-            / train_env_args["name"]
-            / "weights"
-            / "last.pt"
-        )
-        if resume_path.exists():
-            train_env_args["resume"] = str(resume_path)
+    """
+    Train
+    """
 
-    train_opt = train.parse_opt(True)
-    for key, val in train_env_args.items():
+    train_opt = train.parse_opt(known=True)
+    train_args = {
+        "data": str(dataset_file),
+        "hyp": str(hyp_file),
+        "save_period": save_period,
+        "project": str(save_dir),
+        "name": "train",
+        "exist_ok": True,
+    }
+    # only resume if the file exists
+    resume_path: Path = (
+        Path(train_args["project"]) / train_args["name"] / "weights" / "last.pt"
+    )
+    if resume_path.exists():
+        train_args["resume"] = str(resume_path)
+    for key, val in train_args.items():
         setattr(train_opt, key, val)
 
     # special case: use pretrained weights from S3
@@ -112,15 +121,31 @@ def main():
     print("train_opt:", str(train_opt))
     train.main(train_opt)
 
+    """
+    Export
+    """
+
+    # export model to /yolov5/train/weights/best.torchscript
+    export_opt = export.parse_opt(known=True)
+    export_args = {
+        "weights": str(resume_path.parent / "best.pt"),
+        "include": ["torchscript"],
+    }
+    for key, val in export_args.items():
+        setattr(export_opt, key, val)
+
+    print("export_opt", str(export_opt))
+    export.main(export_opt)
+
     # copy model to /opt/ml/model
-    src = resume_path.parent / "best.pt"
+    src = resume_path.parent / "best.torchscript"
     dst = model_dir
     print(f"Copy model {src} to {dst}")
     shutil.copy2(src, dst)
 
     # copy train outputs to /opt/ml/output/data/train
-    src = Path(train_env_args["project"]) / train_env_args["name"]
-    dst = output_data_dir / train_env_args["name"]
+    src = Path(train_args["project"]) / train_args["name"]
+    dst = output_data_dir / train_args["name"]
     print(f"Copy training outputs {src} to {dst}")
     shutil.copytree(
         src,
@@ -129,38 +154,45 @@ def main():
         dirs_exist_ok=True,
     )
 
-    with open(train_env_args["data"], "r") as file:
+    """
+    Test
+    """
+
+    with open(train_args["data"], "r") as file:
         dataset = yaml.safe_load(file)
 
-    if "test" in dataset and (Path(dataset["path"]) / dataset["test"]).exists():
-        test_env_args: typing.Dict[str, typing.Union[str, int, Path]] = {}
-        test_env_args["data"] = train_opt.data
-        test_env_args["project"] = train_opt.project
-        test_env_args["name"] = "test"
-        test_env_args["exist_ok"] = True
-        test_env_args["imgsz"] = train_opt.imgsz
-        test_env_args["task"] = "test"
-        test_env_args["weights"] = str(
+    if not ("test" in dataset and (Path(dataset["path"]) / dataset["test"]).exists()):
+        return
+
+    test_opt = validate.parse_opt(known=True)
+    test_args = {
+        "data": train_opt.data,
+        "project": train_opt.project,
+        "name": "test",
+        "exist_ok": True,
+        "imgsz": train_opt.imgsz,
+        "task": "test",
+        "weights": str(
             Path(train_opt.project) / train_opt.name / "weights" / "best.pt"
-        )
+        ),
+    }
+    for key, val in test_args.items():
+        setattr(test_opt, key, val)
 
-        test_opt = validate.parse_opt(True)
-        for key, val in test_env_args.items():
-            setattr(test_opt, key, val)
+    print("test_opt:", str(test_opt))
+    validate.main(test_opt)
 
-        print("test_opt:", str(test_opt))
-        validate.main(test_opt)
+    # copy test outputs to /opt/ml/output/data/train
+    src = Path(test_args["project"]) / test_args["name"]
+    dst = output_data_dir / test_args["name"]
+    print(f"Copy test outputs {src} to {dst}")
+    shutil.copytree(
+        src,
+        dst,
+        ignore=shutil.ignore_patterns("*.sagemaker-upload*"),
+        dirs_exist_ok=True,
+    )
 
-        # copy test outputs to /opt/ml/output/data/train
-        src = Path(test_env_args["project"]) / test_env_args["name"]
-        dst = output_data_dir / test_env_args["name"]
-        print(f"Copy test outputs {src} to {dst}")
-        shutil.copytree(
-            src,
-            dst,
-            ignore=shutil.ignore_patterns("*.sagemaker-upload*"),
-            dirs_exist_ok=True,
-        )
 
 if __name__ == "__main__":
     main()
